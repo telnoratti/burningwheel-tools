@@ -139,6 +139,8 @@ off the cruft around generating functions in my mind. Also Dean Baker who put
 together some wonderful documents on [his site](http://customrpgfiles.wikidot.com/burning-wheel).
 
 I would like to also include how call-on skills impact dice rolls, though that is a post-roll mechanic.
+
+Source code is freely available (MIT license) at [https://github.com/telnoratti/burningwheel-tools](https://github.com/telnoratti/burningwheel-tools)
             '''),
         ],
         style={'max-width': 1200, 'border': 'thin lightgrey solid', 'padding': '20px', 'margin': 'auto', 'border-radius': 5}
