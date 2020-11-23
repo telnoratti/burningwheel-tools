@@ -14,7 +14,8 @@ import plotly.figure_factory as ff
 
 from diceprobs import get_probs_table, get_probs, pad_cut_probs
 
-app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP,
+    "https://codepen.io/chriddyp/pen/brPBPO.css"])
 
 grid_colors='Greens'
 
@@ -104,6 +105,8 @@ app.layout = html.Div([
     html.Div([
         dcc.Markdown("""
 # About The Page
+
+This is a dice roll probability analysis for the game [Burning Wheel](https://www.burningwheel.com/) by 
 
 There are two charts on this page, the first calculates the impact of various
 ways to spend Artha on the odds of success. The second is a more general graph
