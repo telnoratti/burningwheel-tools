@@ -50,7 +50,7 @@ def ten_by_ten(open_ended, success_count):
             yaxis_title='Obstacle',
             xaxis = {'showgrid': False},
             yaxis = {'showgrid': False})
-    fig.update_traces(hovertemplate="<b>%{y}</b><br>%{x}<br>%{z:.0f}%<extra></extra>",
+    fig.update_traces(hovertemplate="<b>%{y}</b><br>%{x}<br>%{z:.3f}%<extra></extra>",
             xgap=3,
             ygap=3)
     fig['layout']['yaxis']['autorange'] = "reversed"
@@ -105,7 +105,7 @@ def artha_effect(success_count, skill):
             height=800,
             xaxis = {'showgrid': False},
             yaxis = {'showgrid': False})
-    fig.update_traces(hovertemplate="<b>%{y}</b><br>%{x}<br>%{z:.0f}%<extra></extra>",
+    fig.update_traces(hovertemplate="<b>%{y}</b><br>%{x}<br>%{z:.3f}%<extra></extra>",
             xgap=3,
             ygap=3)
     fig['layout']['yaxis']['autorange'] = "reversed"
