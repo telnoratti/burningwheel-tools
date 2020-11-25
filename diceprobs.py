@@ -57,7 +57,10 @@ def sym_probs(num_dice=1, die_faces=6, success_count=None, obstacle_limit=10, lo
     if log:
         print("Generating function: ", pol)
         print("Cummulative prob (low means raise obstacle limit): ", float(coeffs.sum()))
-    return coeffs.cumsum()[::-1]/coeffs.sum()
+
+    cum_coeffs = coeffs.cumsum()[::-1] + (1 - coeffs.sum())
+
+    return cum_coeffs
 
 def sym_explode_probs(num_dice=1, die_faces=6, success_count=None, explode_count=1, obstacle_limit=10, log=False):
     # This is so much easier when not exploding, just discreet normal
@@ -104,7 +107,11 @@ def sym_explode_probs(num_dice=1, die_faces=6, success_count=None, explode_count
     if log:
         print("Generating function: ", pol)
         print("Cummulative prob (low means raise obstacle limit): ", float(coeffs.sum()))
-    return coeffs.cumsum()[::-1]/coeffs.sum()
+        print("Coefficients: ", coeffs[::-1])
+    # We do this here so our cummulative sum includes higher order terms
+    cum_coeffs = coeffs.cumsum()[::-1] + (1 - coeffs.sum())
+
+    return cum_coeffs
 
 #print(list(map(float,sym_probs(2))))
 #print(list(map(float,get_probs(num_dice=3))))
