@@ -1,5 +1,7 @@
 import pandas as pd
 import numpy as np
+import itertools
+from collections import OrderedDict
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
@@ -12,7 +14,8 @@ from dash.dependencies import Input, Output, State
 import plotly.express as px
 import plotly.figure_factory as ff
 
-from diceprobs import get_probs_table, get_probs, pad_cut_probs
+#from diceprobs import get_probs_table, get_probs, pad_cut_probs
+from gen_function import roll_dice
 
 app = dash.Dash(__name__,
         external_stylesheets=[
@@ -33,16 +36,26 @@ def toggle_collapse(n, is_open):
     return is_open
 
 @app.callback(
-    Output("standard", "figure"),
+    Output("odds", "figure"),
     [
-        Input("open-ended", "on"),
-        Input("shade", "value"),
+        Input("odds-shade", "value"),
+        Input("odds-openended", "value"),
     ])
-def ten_by_ten(open_ended, success_count):
-    explode_count = 0
-    if open_ended:
-        explode_count = 1
-    df = get_probs_table(explode_count=explode_count, success_count=success_count)
+def odds(shade, open_ended):
+    if open_ended is None or open_ended == []:
+        open_ended = False
+    else:
+        open_ended = True
+
+    fl = lambda x: list(map(float,x))
+
+    columns = {'obstacle': [i for i in range(10 + 1)]}
+    for i in range(1,10):
+        column = roll_dice(num_dice=i, shade=shade, open_ended=open_ended, cum_sum=True)
+        columns[f"{i}D"] = fl(column)
+    df = pd.DataFrame(data=columns).set_index('obstacle')
+
+    #df = get_probs_table(explode_count=explode_count, success_count=success_count)
     df = df.iloc[1:]
     ylabels = [f"Ob {i}" for i in range(1,11)]
     fig = ff.create_annotated_heatmap(z=df.values*100, x=list(df.columns), y=ylabels, colorscale=grid_colors)
@@ -58,59 +71,101 @@ def ten_by_ten(open_ended, success_count):
         annotation['text'] = "{:.0f}%".format(float(annotation['text']))
     return fig
 
+# https://stackoverflow.com/questions/5228158/cartesian-product-of-a-dictionary-of-lists
+def product_dict(**kwargs):
+    keys = kwargs.keys()
+    vals = kwargs.values()
+    for instance in itertools.product(*vals):
+        yield dict(zip(keys, instance))
+
 @app.callback(
     Output("artha", "figure"),
     [
         Input("artha-shade", "value"),
-        Input("skill", "value")
+        Input("artha-exponent", "value"),
+        Input("artha-openended", "value"),
+        Input("artha-options", "value")
     ])
-def artha_effect(success_count, skill):
-    # This may be ineffecient, but we must calculate all the dice sets independently anyways
-    data = []
-    ycolumns = []
-    # Divine inspiratoin
-    for die_mult in [1, 2]:
-        # epiphany
-        shades = [success_count]
-        if success_count < 5:
-            shades = [success_count, success_count + 1]
-        # Minor Epiphany (Aristeia)
-        for success_count_l in shades:
-            # Open-ended either from Fate with Luck or magic
-            for explode_count in [0, 1]:
-                # Boon from persona or maybe forks
-                for boon in [0, 1, 2, 3]:
-                    slug = []
-                    if explode_count == 1:
-                        slug.append('Open-ended (Fate)')
-                    if boon > 0:
-                        slug.append(f"+{boon}D (Persona)")
-                    if success_count_l != success_count:
-                        slug.append(f"Aristeia")
-                    if die_mult > 1:
-                        slug.append("Divine Inspiration (Deed)")
-                    slug = ', '.join(slug)
-                    ycolumns.append(slug)
+def artha_effect(shade, exponent, open_ended, options):
+    if open_ended is None or open_ended == []:
+        open_ended = False
+    else:
+        open_ended = True
 
-                    num_dice = die_mult*skill + boon
-                    data.append(pad_cut_probs(get_probs(num_dice=num_dice, explode_count=explode_count, success_count=success_count_l), 11)[1:])
+    params = OrderedDict()
+    params['cum_sum'] = [True]
+    params['num_dice'] = [exponent]
+    params['open_ended'] = [open_ended]
+    if 'aristeia' in options:
+        if shade == 'black':
+            params['shade'] = ['black', 'grey']
+        elif shade == 'grey':
+            params['shade'] = ['grey', 'white']
+    else:
+        params['shade'] = [shade]
+        # Can't aristeia white shaded
+
+    if 'divine-inspiration' in options:
+        params['divine_inspiration'] = [False, True]
+    if 'saving-grace' in options:
+        params['saving_grace'] = [False, True]
+
+
+    if 'boon' in options:
+        params['boon'] = [0, 1, 2, 3]
+    if 'luck' in options:
+        params['luck'] = [False, True]
+
+    # This may be ineffecient, but we must calculate all the dice sets independently anyways
+    fl = lambda x: list(map(float,x))
+    exact_data = []
+    float_data = []
+    ycolumns = []
+    for values in product_dict(**params):
+        artha_cost = [0, 0, 0] #F, P, D
+        slug = []
+        if values.get('luck', False) == True:
+            artha_cost[0] += 1
+            slug.append('Luck')
+        if values.get('boon', 0) > 0:
+            artha_cost[1] += values['boon']
+            slug.append(f"+{values['boon']}D Boon")
+        if values.get('shade', None) != shade:
+            artha_cost[0] += 5
+            artha_cost[1] += 3
+            artha_cost[2] += 1
+            slug.append(f"Aristeia")
+        if values.get('divine_inspiration', False):
+            artha_cost[2] += 1
+            slug.append("Div. Insp.")
+        if values.get('saving_grace', False):
+            artha_cost[2] += 1
+            slug.append("Sav. Gr.")
+        slug = ', '.join(slug)
+        ycolumns.append(f'{slug} ({artha_cost[0]}F {artha_cost[1]}P {artha_cost[2]}D)')
+
+        exact = roll_dice(**values)
+        exact_data.append(exact[1:])
+        float_data.append(fl(exact[1:]))
 
     # Set the first ycolumn as well
-    ycolumns[0] = 'Basic'
-    data = np.array(data)
+    ycolumns[0] = '(0F 0P 0D)'
+    height = len(ycolumns)*100/2.5 + 200
+    data = np.array(float_data)
     xlabels = [f"Ob {i}" for i in range(1,11)]
     fig = ff.create_annotated_heatmap(z=data*100, x=xlabels, y=ycolumns, colorscale=grid_colors)
     fig.update_layout(
             xaxis_title='Obstacle',
-            height=800,
+            height=height,
             xaxis = {'showgrid': False},
             yaxis = {'showgrid': False})
-    fig.update_traces(hovertemplate="<b>%{y}</b><br>%{x}<br>%{z:.3f}%<extra></extra>",
+    fig.update_traces(hovertemplate="<b>%{y}</b><br>%{x}<br>%{z:.3f}%<br><extra></extra>",
             xgap=3,
             ygap=3)
     fig['layout']['yaxis']['autorange'] = "reversed"
     for annotation in fig['layout']['annotations']:
         annotation['text'] = "{:.0f}%".format(float(annotation['text']))
+
     return fig
 
 
@@ -274,70 +329,108 @@ the calculations are the same.
         ],
         style={'maxWidth': 1200, 'border': 'thin lightgrey solid', 'padding': '20px', 'margin': 'auto', 'borderRadius': 5}
     ),
-    html.Div([
-        html.H2("Ways Artha Impacts Odds of Success", style={'textAlign': 'center'}),
-        dbc.Row([
-            dbc.Col([
-                html.P("Skill Shade"),
-                dcc.Dropdown(
-                    id="artha-shade",
-                    options=[
-                        {'label': 'Black Shade', 'value': 3},
-                        {'label': 'Grey Shade', 'value': 4},
-                        {'label': 'White Shade', 'value': 5},
-                    ],
-                    value=3,
-                )]
-            ),
-            dbc.Col([
-                html.P("Skill Exponent"),
-                daq.NumericInput(
-                    id='skill',
-                    value=3
-                )]
-            )],
-            style={'borderBottom': 'thin lightgrey solid', 'padding': '0 0 10px'}
-        ),
-        dbc.Row([
-            dbc.Col([
-                    dcc.Graph(id="artha")
+    dbc.Card([
+        dbc.CardBody([
+            html.H2("Ways Artha Impacts Odds of Success", className="card-title", style={'textAlign': 'center'}),
+            dbc.Row([
+                dbc.Col([
+                    dbc.FormGroup([
+                        dbc.Label("Skill Shade", html_for="artha-shade", width=4),
+                        dbc.Col(
+                            dbc.Select(
+                                id="artha-shade",
+                                options=[
+                                    {'label': 'Black Shade', 'value': 'black'},
+                                    {'label': 'Grey Shade', 'value': 'grey'},
+                                    {'label': 'White Shade', 'value': 'white'}],
+                                value='black'
+                                ),
+                            width=8)
+                        ], row=True),
+                    dbc.FormGroup([
+                        dbc.Label("Exponent", width=4),
+                        dbc.Col(
+                            dbc.Input(id="artha-exponent", type="number", min=0, max=15, step=1, value=3),
+                            width=8)
+                        ], row=True),
+                    dbc.FormGroup([
+                        dbc.Label("Open-ended", width=4),
+                        dbc.Col(
+                            dbc.Checklist(
+                                id="artha-openended",
+                                options=[
+                                    {'label': '', 'value': 'open-ended'}],
+                                switch=True),
+                            width=8)
+                        ], row=True),
+                    ]),
+                dbc.Col([
+                    dbc.FormGroup([
+                        dbc.Label("Artha Options"),
+                        dbc.Checklist(
+                            options=[
+                                {'label': 'Luck (1 Fate)', 'value': 'luck'},
+                                {'label': 'Boon (1-3 Persona)', 'value': 'boon'},
+                                {'label': 'Divine Inspiration (1 Deed)', 'value': 'divine-inspiration'},
+                                {'label': 'Saving Grace (1 Deed)', 'value': 'saving-grace'},
+                                {'label': 'Aristeia (5 Fate, 3 Persona, 1 Deed)', 'value': 'aristeia'},],
+                            value=['luck', 'boon', 'divine-inspiration'],
+                            id="artha-options"),
+                        ])
+                    ]),
+                ],
+                style={'borderBottom': 'thin lightgrey solid', 'padding': '0 0 10px'}),
+            dbc.Row([
                 ]),
-            ]),
+            dbc.Row([
+                dbc.Col([
+                        dcc.Graph(id="artha")]),
+                ]),
+            ])
         ],
-        style={'borderBottom': 'thin lightgrey solid',
-                'backgroundColor': 'rgb(250, 250, 250)',
-                'padding': '10px'}
-    ),
-    html.Div([
-        html.H2("Odds of Success", style={'textAlign': 'center'}),
-        dbc.Row([
-            dbc.Col([
-                html.P("Open-ended skill"),
-                daq.BooleanSwitch(
-                    id="open-ended",
-                    on=False,
-                )]
-            ),
-            dbc.Col([
-                html.P("Skill Shade"),
-                dcc.Dropdown(
-                    id="shade",
-                    options=[
-                        {'label': 'Black Shade', 'value': 3},
-                        {'label': 'Grey Shade', 'value': 4},
-                        {'label': 'White Shade', 'value': 5},
-                    ],
-                    value=3,
-                )]
-            )],
-            style={'borderBottom': 'thin lightgrey solid', 'padding': '0 0 10px'}
-        ),
-        dbc.Row([
-            dbc.Col([
-                    dcc.Graph(id="standard")
-                ])
-            ]),
-    ])],
+        style={'margin': '10px 0 0 0'}),
+    dbc.Card([
+        dbc.CardBody([
+            html.H2("Odds of Success", style={'textAlign': 'center'}),
+            dbc.Row([
+                dbc.Col(width=2),
+                dbc.Col([
+                    dbc.FormGroup([
+                        dbc.Label("Skill Shade", html_for="artha-shade", width=4),
+                        dbc.Col(
+                            dbc.Select(
+                                id="odds-shade",
+                                options=[
+                                    {'label': 'Black Shade', 'value': 'black'},
+                                    {'label': 'Grey Shade', 'value': 'grey'},
+                                    {'label': 'White Shade', 'value': 'white'}],
+                                value='black'
+                                ),
+                            width=8)
+                        ], row=True),
+                    dbc.FormGroup([
+                        dbc.Label("Open-ended", width=4),
+                        dbc.Col(
+                            dbc.Checklist(
+                                id="odds-openended",
+                                options=[
+                                    {'label': '', 'value': 'open-ended'}],
+                                switch=True),
+                            width=8)
+                        ], row=True),
+                    ], width=6),
+                dbc.Col(width=2),
+                ],
+                style={'borderBottom': 'thin lightgrey solid', 'padding': '0 0 10px'}),
+            dbc.Row([
+                dbc.Col([
+                        dcc.Graph(id="odds")
+                    ])
+                ]),
+            ])
+        ],
+        style={'margin': '10px 0 0 0'}),
+    ],
     style={'maxWidth': 1200, 'border': 'thin lightgrey solid', 'padding': 20, 'margin': 'auto', 'borderRadius': 5}
 )
 
