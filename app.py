@@ -140,7 +140,7 @@ def artha_effect(shade, exponent, open_ended, options):
             slug.append("Div. Insp.")
         if values.get('saving_grace', False):
             artha_cost[2] += 1
-            slug.append("Sav. Gr.")
+            slug.append("Sav. Gr./C-O")
         slug = ', '.join(slug)
         ycolumns.append(f'{slug} ({artha_cost[0]}F {artha_cost[1]}P {artha_cost[2]}D)')
 
@@ -372,7 +372,7 @@ the calculations are the same.
                                 {'label': 'Luck (1 Fate)', 'value': 'luck'},
                                 {'label': 'Boon (1-3 Persona)', 'value': 'boon'},
                                 {'label': 'Divine Inspiration (1 Deed)', 'value': 'divine-inspiration'},
-                                {'label': 'Saving Grace (1 Deed)', 'value': 'saving-grace'},
+                                {'label': 'Saving Grace (1 Deed) / Call-On', 'value': 'saving-grace'},
                                 {'label': 'Aristeia (5 Fate, 3 Persona, 1 Deed)', 'value': 'aristeia'},],
                             value=['luck', 'boon', 'divine-inspiration'],
                             id="artha-options"),
